@@ -105,7 +105,7 @@ export default {
             .setImage(weather.image)
 
             .setFooter({
-                text: 'ZEYA Weather System'
+                text: 'Zeya! Weather System'
             })
 
             .setTimestamp();
