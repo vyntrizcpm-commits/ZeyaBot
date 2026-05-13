@@ -1,6 +1,5 @@
-﻿import 'dotenv/config';
-import { Client, Collection, GatewayIntentBits } from 'discord.js';
-import { REST } from '@discordjs/rest';
+import 'dotenv/config';
+import { Client, Collection, GatewayIntentBits, REST, Routes } from 'discord.js';
 import express from 'express';
 import cron from 'node-cron';
 
@@ -11,7 +10,7 @@ import { getServerCounters, saveServerCounters, updateCounter } from './services
 import { logger, startupLog, shutdownLog } from './utils/logger.js';
 import { checkBirthdays } from './services/birthdayService.js';
 import { checkGiveaways } from './services/giveawayService.js';
-import { loadCommands, registerCommands as registerSlashCommands } from './handlers/commandLoader.js';
+import { loadCommands } from './handlers/commandLoader.js';
 
 class TitanBot extends Client {
   constructor() {
@@ -35,6 +34,7 @@ class TitanBot extends Client {
     this.modals = new Collection();
     this.cooldowns = new Collection();
     this.db = null;
+
     this.rest = new REST({ version: '10' }).setToken(config.bot.token);
   }
 
@@ -72,7 +72,8 @@ class TitanBot extends Client {
 
       startupLog('Discord login successful');
 
-      const handlerSummary = `${this.buttons.size} buttons, ${this.selectMenus.size} menus, ${this.modals.size} modals`;
+      const handlerSummary =
+        `${this.buttons.size} buttons, ${this.selectMenus.size} menus, ${this.modals.size} modals`;
 
       startupLog(
         `ONLINE ✅ | ${this.commands.size} commands loaded | ${handlerSummary}`
@@ -122,7 +123,7 @@ class TitanBot extends Client {
     }
   }
 
-  // 🔥 FIXED HERE — GLOBAL COMMAND REGISTRATION ONLY
+  // ✅ FIXED GLOBAL COMMAND REGISTRATION
   async registerCommands() {
     try {
       const commands = [];
@@ -138,7 +139,7 @@ class TitanBot extends Client {
       logger.info(`Registering ${commands.length} GLOBAL slash commands...`);
 
       await this.rest.put(
-        require('discord.js').Routes.applicationCommands(clientId),
+        Routes.applicationCommands(clientId),
         { body: commands }
       );
 
