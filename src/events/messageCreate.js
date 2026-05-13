@@ -17,15 +17,45 @@ export default {
   async execute(message, client) {
     try {
       
-      if (message.author.bot || !message.guild) return;
+   if (message.author.bot || !message.guild) return;
 
 client.afkUsers ??= new Map();
 
+const formatDuration = (ms) => {
+  const seconds = Math.floor(ms / 1000);
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  const parts = [];
+
+  if (days) parts.push(`${days}d`);
+  if (hours) parts.push(`${hours}h`);
+  if (minutes) parts.push(`${minutes}m`);
+  if (secs) parts.push(`${secs}s`);
+
+  return parts.join(' ') || '0s';
+};
+
 if (client.afkUsers.has(message.author.id)) {
+  const afkData = client.afkUsers.get(message.author.id);
+  const duration = formatDuration(Date.now() - afkData.time);
+
   client.afkUsers.delete(message.author.id);
 
   message.reply({
-    content: '✨ Welcome back! Your AFK status has been removed.'
+    embeds: [
+      {
+        color: 0xffffff,
+        title: '✨ Welcome Back',
+        description: `Your AFK status has been removed.\n\n⏰ AFK Duration: **${duration}**`,
+        footer: {
+          text: 'ZEYA AFK System'
+        },
+        timestamp: new Date()
+      }
+    ]
   }).catch(() => {});
 }
 
@@ -34,9 +64,20 @@ if (message.mentions.users.size > 0) {
 
   if (client.afkUsers.has(mentionedUser.id)) {
     const afkData = client.afkUsers.get(mentionedUser.id);
+    const duration = formatDuration(Date.now() - afkData.time);
 
     message.reply({
-      content: `🌙 **${mentionedUser.tag}** is AFK: ${afkData.reason}`
+      embeds: [
+        {
+          color: 0xffffff,
+          title: '🌙 User is AFK',
+          description: `**${mentionedUser.tag}** is currently AFK.\n\n📝 Reason: **${afkData.reason}**\n⏰ Since: **${duration}**`,
+          footer: {
+            text: 'ZEYA AFK System'
+          },
+          timestamp: new Date()
+        }
+      ]
     }).catch(() => {});
   }
 }
@@ -56,25 +97,22 @@ if (message.content.startsWith(prefix)) {
     });
 
     return message.reply({
-      content: `🌸 You are now AFK: **${reason}**`
+      embeds: [
+        {
+          color: 0xffffff,
+          title: '🌸 AFK Enabled',
+          description: `You are now AFK.\n\n📝 Reason: **${reason}**`,
+          footer: {
+            text: 'ZEYA AFK System'
+          },
+          timestamp: new Date()
+        }
+      ]
     });
   }
 }
 
 await handleLeveling(message, client);
-    } catch (error) {
-      logger.error('Error in messageCreate event:', error);
-    }
-  }
-};
-
-
-
-
-
-
-
-
 async function handleLeveling(message, client) {
   try {
     const rateLimitKey = `xp-event:${message.guild.id}:${message.author.id}`;
