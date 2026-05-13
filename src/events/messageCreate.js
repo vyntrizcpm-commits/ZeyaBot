@@ -19,7 +19,49 @@ export default {
       
       if (message.author.bot || !message.guild) return;
 
-      await handleLeveling(message, client);
+client.afkUsers ??= new Map();
+
+if (client.afkUsers.has(message.author.id)) {
+  client.afkUsers.delete(message.author.id);
+
+  message.reply({
+    content: '✨ Welcome back! Your AFK status has been removed.'
+  }).catch(() => {});
+}
+
+if (message.mentions.users.size > 0) {
+  const mentionedUser = message.mentions.users.first();
+
+  if (client.afkUsers.has(mentionedUser.id)) {
+    const afkData = client.afkUsers.get(mentionedUser.id);
+
+    message.reply({
+      content: `🌙 **${mentionedUser.tag}** is AFK: ${afkData.reason}`
+    }).catch(() => {});
+  }
+}
+
+const prefix = 'z!';
+
+if (message.content.startsWith(prefix)) {
+  const args = message.content.slice(prefix.length).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
+  if (command === 'afk') {
+    const reason = args.join(' ') || 'AFK';
+
+    client.afkUsers.set(message.author.id, {
+      reason,
+      time: Date.now()
+    });
+
+    return message.reply({
+      content: `🌸 You are now AFK: **${reason}**`
+    });
+  }
+}
+
+await handleLeveling(message, client);
     } catch (error) {
       logger.error('Error in messageCreate event:', error);
     }
