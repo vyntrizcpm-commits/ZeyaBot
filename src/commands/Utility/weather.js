@@ -49,10 +49,22 @@ export default {
             const { latitude, longitude, name, country } = geoData.results[0];
 
             const weatherResponse = await fetch(
-                `${WEATHER_URL}?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto`
+                `${WEATHER_URL}?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min&forecast_days=3&timezone=auto`
             );
 
             const weatherData = await weatherResponse.json();
+
+            if (weatherData.error) {
+
+                return await InteractionHelper.safeEditReply(interaction, {
+                    embeds: [
+                        errorEmbed(
+                            "Weather Error",
+                            "Failed to fetch weather data."
+                        )
+                    ]
+                });
+            }
 
             const current = weatherData.current;
 
@@ -65,21 +77,28 @@ export default {
 
             const weather = getWeatherDescription(weatherCode);
 
-            const maxToday = Math.round(weatherData.daily.temperature_2m_max[0]);
-            const minToday = Math.round(weatherData.daily.temperature_2m_min[0]);
-
             const embed = createEmbed({
                 title: `${weather.emoji} ${temperature}°C • ${weather.name}`,
                 description:
-`### 📍 ${name}, ${country}
+`📍 **${name}, ${country}**
 
 🌡️ **Feels Like:** ${feelsLike}°C
 💨 **Wind Speed:** ${windSpeed} km/h
 💧 **Humidity:** ${humidity}%
 
-📈 **Today's Forecast**
-🔺 Max: ${maxToday}°C
-🔻 Min: ${minToday}°C`
+📅 **3-Day Forecast**
+
+**Today**
+🔺 ${Math.round(weatherData.daily.temperature_2m_max[0])}°C
+🔻 ${Math.round(weatherData.daily.temperature_2m_min[0])}°C
+
+**Tomorrow**
+🔺 ${Math.round(weatherData.daily.temperature_2m_max[1])}°C
+🔻 ${Math.round(weatherData.daily.temperature_2m_min[1])}°C
+
+**Day After**
+🔺 ${Math.round(weatherData.daily.temperature_2m_max[2])}°C
+🔻 ${Math.round(weatherData.daily.temperature_2m_min[2])}°C`
             })
 
             .setColor(0xffffff)
@@ -94,6 +113,12 @@ export default {
 
             await InteractionHelper.safeEditReply(interaction, {
                 embeds: [embed]
+            });
+
+            logger.info(`Weather command executed`, {
+                city: name,
+                country: country,
+                userId: interaction.user.id
             });
 
         } catch (error) {
@@ -117,7 +142,7 @@ function getWeatherDescription(code) {
         return {
             name: "Clear Sky",
             emoji: "☀️",
-            image: "https://i.imgur.com/8OZ4Fhn.png"
+            image: "https://images.unsplash.com/photo-1506744038136-46273834b3fb"
         };
     }
 
@@ -125,7 +150,7 @@ function getWeatherDescription(code) {
         return {
             name: "Partly Cloudy",
             emoji: "⛅",
-            image: "https://i.imgur.com/vgLHf7x.png"
+            image: "https://images.unsplash.com/photo-1499346030926-9a72daac6c63"
         };
     }
 
@@ -133,7 +158,7 @@ function getWeatherDescription(code) {
         return {
             name: "Foggy",
             emoji: "🌫️",
-            image: "https://i.imgur.com/5TRQpPj.png"
+            image: "https://images.unsplash.com/photo-1485236715568-ddc5ee6ca227"
         };
     }
 
@@ -141,7 +166,7 @@ function getWeatherDescription(code) {
         return {
             name: "Rainy",
             emoji: "🌧️",
-            image: "https://i.imgur.com/SqgoF8T.png"
+            image: "https://images.unsplash.com/photo-1515694346937-94d85e41e6f0"
         };
     }
 
@@ -149,7 +174,7 @@ function getWeatherDescription(code) {
         return {
             name: "Snowy",
             emoji: "❄️",
-            image: "https://i.imgur.com/y8T8s8M.png"
+            image: "https://images.unsplash.com/photo-1483664852095-d6cc6870702d"
         };
     }
 
@@ -157,13 +182,13 @@ function getWeatherDescription(code) {
         return {
             name: "Thunderstorm",
             emoji: "⛈️",
-            image: "https://i.imgur.com/VYq6X9B.png"
+            image: "https://images.unsplash.com/photo-1500674425229-f692875b0ab7"
         };
     }
 
     return {
         name: "Unknown Weather",
         emoji: "🌍",
-        image: "https://i.imgur.com/vgLHf7x.png"
+        image: "https://images.unsplash.com/photo-1499346030926-9a72daac6c63"
     };
 }
