@@ -3,11 +3,13 @@
 
 
 
-import { Events } from 'discord.js';
+import { Events, EmbedBuilder } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { getLevelingConfig, getUserLevelData } from '../services/leveling.js';
 import { addXp } from '../services/xpSystem.js';
 import { checkRateLimit } from '../utils/rateLimiter.js';
+import { getFromDb, getAFKKey } from '../utils/database.js';
+import { getColor } from '../config/bot.js';
 
 const MESSAGE_XP_RATE_LIMIT_ATTEMPTS = 12;
 const MESSAGE_XP_RATE_LIMIT_WINDOW_MS = 10000;
@@ -19,6 +21,7 @@ export default {
       
       if (message.author.bot || !message.guild) return;
 
+      await handleAFKMentions(message, client);
       await handleLeveling(message, client);
     } catch (error) {
       logger.error('Error in messageCreate event:', error);
@@ -32,6 +35,46 @@ export default {
 
 
 
+
+async function handleAFKMentions(message, client) {
+  try {
+    // Only process messages that mention at least one user
+    if (!message.mentions.users.size) return;
+
+    const afkEmbeds = [];
+
+    for (const [userId, user] of message.mentions.users) {
+      // Don't notify if the author pinged themselves
+      if (userId === message.author.id) continue;
+
+      const afkKey = getAFKKey(message.guild.id, userId);
+      const afkData = await getFromDb(afkKey, null);
+
+      if (!afkData) continue;
+
+      const afkTimestamp = Math.floor(afkData.timestamp / 1000);
+
+      const embed = new EmbedBuilder()
+        .setColor(getColor('info'))
+        .setTitle('💤 User is AFK')
+        .setDescription(`${user} is currently AFK and may not respond.`)
+        .addFields(
+          { name: '📝 Reason', value: afkData.reason, inline: false },
+          { name: '🕐 Since', value: `<t:${afkTimestamp}:R>`, inline: true }
+        )
+        .setThumbnail(user.displayAvatarURL({ size: 64 }))
+        .setTimestamp();
+
+      afkEmbeds.push(embed);
+    }
+
+    if (afkEmbeds.length > 0) {
+      await message.reply({ embeds: afkEmbeds });
+    }
+  } catch (error) {
+    logger.error('Error handling AFK mentions:', error);
+  }
+}
 
 async function handleLeveling(message, client) {
   try {
