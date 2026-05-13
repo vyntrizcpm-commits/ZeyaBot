@@ -1,130 +1,108 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { createEmbed, errorEmbed, successEmbed, infoEmbed, warningEmbed } from '../../utils/embeds.js';
+import { createEmbed, errorEmbed } from '../../utils/embeds.js';
 import { logger } from '../../utils/logger.js';
 import { handleInteractionError } from '../../utils/errorHandler.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
+
 const GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
 const WEATHER_URL = "https://api.open-meteo.com/v1/forecast";
 
 export default {
     data: new SlashCommandBuilder()
         .setName("weather")
-        .setDescription("Get real-time weather information for a location")
+        .setDescription("Get real-time weather information")
         .addStringOption((option) =>
             option
                 .setName("city")
-                .setDescription("The city name, e.g., 'London' or 'Tokyo'")
+                .setDescription("Enter a city")
                 .setRequired(true),
         ),
 
     async execute(interaction) {
+
         try {
+
             const deferSuccess = await InteractionHelper.safeDefer(interaction);
-            if (!deferSuccess) {
-                logger.warn(`Weather interaction defer failed`, {
-                    userId: interaction.user.id,
-                    guildId: interaction.guildId,
-                    commandName: 'weather'
-                });
-                return;
-            }
+
+            if (!deferSuccess) return;
 
             const city = interaction.options.getString("city");
 
             const geoResponse = await fetch(
-                `${GEOCODING_URL}?name=${encodeURIComponent(city)}`,
+                `${GEOCODING_URL}?name=${encodeURIComponent(city)}`
             );
+
             const geoData = await geoResponse.json();
 
             if (!geoData.results || geoData.results.length === 0) {
-                logger.info(`Weather command - city not found`, {
-                    userId: interaction.user.id,
-                    city: city,
-                    guildId: interaction.guildId
-                });
-                await InteractionHelper.safeEditReply(interaction, {
+
+                return await InteractionHelper.safeEditReply(interaction, {
                     embeds: [
                         errorEmbed(
                             "City Not Found",
-                            `Could not find a location for **${city}**. Please check the spelling.`,
-                        ),
-                    ],
+                            `Could not find **${city}**.`
+                        )
+                    ]
                 });
-                return;
             }
 
             const { latitude, longitude, name, country } = geoData.results[0];
-            const cityDisplay = name;
 
             const weatherResponse = await fetch(
-                `${WEATHER_URL}?latitude=${latitude}&longitude=${longitude}&current_weather=true`,
+                `${WEATHER_URL}?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto`
             );
+
             const weatherData = await weatherResponse.json();
 
-            if (weatherData.error) {
-                logger.error(`Weather API error`, {
-                    error: weatherData.reason,
-                    city: city,
-                    userId: interaction.user.id,
-                    guildId: interaction.guildId
-                });
-                await InteractionHelper.safeEditReply(interaction, {
-                    embeds: [
-                        errorEmbed(
-                            "API Error",
-                            "A weather service error occurred.",
-                        ),
-                    ],
-                });
-                return;
-            }
+            const current = weatherData.current;
 
-            const current = weatherData.current || weatherData.current_weather || {};
-            const temperature = current.temperature != null ? Math.round(current.temperature) : "N/A";
-            const humidity = current.relativehumidity ?? current.relative_humidity_2m ?? "N/A";
-            const windSpeed = current.windspeed != null ? Math.round(current.windspeed) : "N/A";
-            const weatherCode = current.weathercode ?? current.weather_code ?? null;
+            const temperature = Math.round(current.temperature_2m);
+            const feelsLike = Math.round(current.apparent_temperature);
+            const humidity = current.relative_humidity_2m;
+            const windSpeed = Math.round(current.wind_speed_10m);
 
-            const condition = getWeatherDescription(weatherCode);
+            const weatherCode = current.weather_code;
 
-            const embed = createEmbed({ title: `🌎 Weather in ${cityDisplay}, ${country}`, description: condition.description })
-                .addFields(
-                    {
-                        name: "🌡️ Temperature",
-                        value: `${temperature}°C`,
-                        inline: true,
-                    },
-                    {
-                        name: "💧 Humidity",
-                        value: `${humidity}%`,
-                        inline: true,
-                    },
-                    {
-                        name: "💨 Wind Speed",
-                        value: `${windSpeed} km/h`,
-                        inline: true,
-                    },
-                )
-                .setFooter({
-                    text: `Latitude: ${latitude.toFixed(2)} | Longitude: ${longitude.toFixed(2)}`,
-                });
+            const weather = getWeatherDescription(weatherCode);
 
-            await InteractionHelper.safeEditReply(interaction, { embeds: [embed] });
-            logger.info(`Weather command executed`, {
-                userId: interaction.user.id,
-                city: cityDisplay,
-                country: country,
-                temperature: temperature,
-                guildId: interaction.guildId
+            const maxToday = Math.round(weatherData.daily.temperature_2m_max[0]);
+            const minToday = Math.round(weatherData.daily.temperature_2m_min[0]);
+
+            const embed = createEmbed({
+                title: `${weather.emoji} ${temperature}°C • ${weather.name}`,
+                description:
+`### 📍 ${name}, ${country}
+
+🌡️ **Feels Like:** ${feelsLike}°C
+💨 **Wind Speed:** ${windSpeed} km/h
+💧 **Humidity:** ${humidity}%
+
+📈 **Today's Forecast**
+🔺 Max: ${maxToday}°C
+🔻 Min: ${minToday}°C`
+            })
+
+            .setColor(0xffffff)
+
+            .setImage(weather.image)
+
+            .setFooter({
+                text: 'ZEYA Weather System'
+            })
+
+            .setTimestamp();
+
+            await InteractionHelper.safeEditReply(interaction, {
+                embeds: [embed]
             });
+
         } catch (error) {
+
             logger.error(`Weather command execution failed`, {
                 error: error.message,
-                stack: error.stack,
-                userId: interaction.user.id,
-                guildId: interaction.guildId,
-                commandName: 'weather'
+                stack: error.stack
             });
+
             await handleInteractionError(interaction, error, {
                 commandName: 'weather',
                 source: 'weather_command'
@@ -133,26 +111,59 @@ export default {
     },
 };
 
-
-
-
-
 function getWeatherDescription(code) {
-    if (code >= 0 && code <= 3) {
-        return { description: "Clear sky / Partly cloudy ☀️", emoji: "☀️" };
-    } else if (code >= 45 && code <= 48) {
-        return { description: "Fog and Rime fog 🌫️", emoji: "🌫️" };
-    } else if (code >= 51 && code <= 67) {
-        return { description: "Drizzle or Rain 🌧️", emoji: "🌧️" };
-    } else if (code >= 71 && code <= 75) {
-        return { description: "Snow fall ❄️", emoji: "❄️" };
-    } else if (code >= 80 && code <= 86) {
-        return { description: "Showers (Rain/Snow) 🌨️", emoji: "🌨️" };
-    } else if (code >= 95 && code <= 99) {
-        return { description: "Thunderstorm ⛈️", emoji: "⛈️" };
+
+    if (code >= 0 && code <= 1) {
+        return {
+            name: "Clear Sky",
+            emoji: "☀️",
+            image: "https://i.imgur.com/8OZ4Fhn.png"
+        };
     }
-    return { description: "Unknown conditions.", emoji: "" };
+
+    if (code >= 2 && code <= 3) {
+        return {
+            name: "Partly Cloudy",
+            emoji: "⛅",
+            image: "https://i.imgur.com/vgLHf7x.png"
+        };
+    }
+
+    if (code >= 45 && code <= 48) {
+        return {
+            name: "Foggy",
+            emoji: "🌫️",
+            image: "https://i.imgur.com/5TRQpPj.png"
+        };
+    }
+
+    if (code >= 51 && code <= 67) {
+        return {
+            name: "Rainy",
+            emoji: "🌧️",
+            image: "https://i.imgur.com/SqgoF8T.png"
+        };
+    }
+
+    if (code >= 71 && code <= 86) {
+        return {
+            name: "Snowy",
+            emoji: "❄️",
+            image: "https://i.imgur.com/y8T8s8M.png"
+        };
+    }
+
+    if (code >= 95 && code <= 99) {
+        return {
+            name: "Thunderstorm",
+            emoji: "⛈️",
+            image: "https://i.imgur.com/VYq6X9B.png"
+        };
+    }
+
+    return {
+        name: "Unknown Weather",
+        emoji: "🌍",
+        image: "https://i.imgur.com/vgLHf7x.png"
+    };
 }
-
-
-
