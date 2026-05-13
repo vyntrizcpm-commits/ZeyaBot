@@ -78,29 +78,28 @@ export default {
             const weather = getWeatherDescription(weatherCode);
 
             const embed = createEmbed({
-                title: `${weather.emoji} ${temperature}°C • ${weather.name}`,
-                description:
+    title: `${weather.emoji} ${temperature}°C / ${Math.round((temperature * 9/5) + 32)}°F • ${weather.name}`,
+    description:
 `📍 **${name}, ${country}**
 
-🌡️ **Feels Like:** ${feelsLike}°C
+🌡️ **Feels Like:** ${feelsLike}°C / ${Math.round((feelsLike * 9/5) + 32)}°F
 💨 **Wind Speed:** ${windSpeed} km/h
 💧 **Humidity:** ${humidity}%
 
 📅 **3-Day Forecast**
 
 **Today**
-🔺 ${Math.round(weatherData.daily.temperature_2m_max[0])}°C
-🔻 ${Math.round(weatherData.daily.temperature_2m_min[0])}°C
+🌡️ High: ${Math.round(weatherData.daily.temperature_2m_max[0])}°C / ${Math.round((weatherData.daily.temperature_2m_max[0] * 9/5) + 32)}°F
+❄️ Low: ${Math.round(weatherData.daily.temperature_2m_min[0])}°C / ${Math.round((weatherData.daily.temperature_2m_min[0] * 9/5) + 32)}°F
 
 **Tomorrow**
-🔺 ${Math.round(weatherData.daily.temperature_2m_max[1])}°C
-🔻 ${Math.round(weatherData.daily.temperature_2m_min[1])}°C
+🌡️ High: ${Math.round(weatherData.daily.temperature_2m_max[1])}°C / ${Math.round((weatherData.daily.temperature_2m_max[1] * 9/5) + 32)}°F
+❄️ Low: ${Math.round(weatherData.daily.temperature_2m_min[1])}°C / ${Math.round((weatherData.daily.temperature_2m_min[1] * 9/5) + 32)}°F
 
 **Day After**
-🔺 ${Math.round(weatherData.daily.temperature_2m_max[2])}°C
-🔻 ${Math.round(weatherData.daily.temperature_2m_min[2])}°C`
-            })
-
+🌡️ High: ${Math.round(weatherData.daily.temperature_2m_max[2])}°C / ${Math.round((weatherData.daily.temperature_2m_max[2] * 9/5) + 32)}°F
+❄️ Low: ${Math.round(weatherData.daily.temperature_2m_min[2])}°C / ${Math.round((weatherData.daily.temperature_2m_min[2] * 9/5) + 32)}°F`
+})
             .setColor(0xffffff)
 
             .setImage(weather.image)
