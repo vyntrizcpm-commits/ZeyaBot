@@ -5,6 +5,8 @@ import { handleInteractionError } from '../../utils/errorHandler.js';
 import { InteractionHelper } from '../../utils/interactionHelper.js';
 const GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
 const WEATHER_URL = "https://api.open-meteo.com/v1/forecast";
+const FETCH_TIMEOUT_MS = 10_000;
+const CONNECTIVITY_CHECK_URL = "https://api.open-meteo.com/v1/forecast?latitude=0&longitude=0&current_weather=true";
 
 export default {
     data: new SlashCommandBuilder()
@@ -31,9 +33,62 @@ export default {
 
             const city = interaction.options.getString("city");
 
-            const geoResponse = await fetch(
-                `${GEOCODING_URL}?name=${encodeURIComponent(city)}`,
-            );
+            // Geocoding fetch with timeout
+            let geoResponse;
+            try {
+                const geoController = new AbortController();
+                const geoTimeout = setTimeout(() => geoController.abort(), FETCH_TIMEOUT_MS);
+                geoResponse = await fetch(
+                    `${GEOCODING_URL}?name=${encodeURIComponent(city)}`,
+                    { signal: geoController.signal },
+                );
+                clearTimeout(geoTimeout);
+            } catch (fetchError) {
+                const isTimeout = fetchError.name === 'AbortError';
+                logger.error(`Weather command - geocoding fetch failed`, {
+                    error: fetchError.message,
+                    errorName: fetchError.name,
+                    isTimeout,
+                    city,
+                    userId: interaction.user.id,
+                    guildId: interaction.guildId,
+                    commandName: 'weather'
+                });
+
+                // Fallback connectivity check to distinguish network-down from API-specific issues
+                let hasInternet = false;
+                try {
+                    const checkController = new AbortController();
+                    const checkTimeout = setTimeout(() => checkController.abort(), 5_000);
+                    const checkResponse = await fetch(CONNECTIVITY_CHECK_URL, { signal: checkController.signal });
+                    clearTimeout(checkTimeout);
+                    hasInternet = checkResponse.ok || checkResponse.status < 500;
+                } catch {
+                    hasInternet = false;
+                }
+
+                logger.warn(`Weather command - connectivity check result`, {
+                    hasInternet,
+                    city,
+                    userId: interaction.user.id,
+                    guildId: interaction.guildId
+                });
+
+                await InteractionHelper.safeEditReply(interaction, {
+                    embeds: [
+                        errorEmbed(
+                            isTimeout ? "⏱️ Request Timed Out" : "🌐 Network Error",
+                            isTimeout
+                                ? "The geocoding service took too long to respond. Please try again in a moment."
+                                : hasInternet
+                                    ? "Could not reach the geocoding service. The API may be temporarily unavailable."
+                                    : "The bot is having trouble reaching the internet. Please try again later.",
+                        ),
+                    ],
+                });
+                return;
+            }
+
             const geoData = await geoResponse.json();
 
             if (!geoData.results || geoData.results.length === 0) {
@@ -56,15 +111,50 @@ export default {
             const { latitude, longitude, name, country } = geoData.results[0];
             const cityDisplay = name;
 
-            const weatherResponse = await fetch(
-                `${WEATHER_URL}?latitude=${latitude}&longitude=${longitude}&current_weather=true`,
-            );
+            // Weather fetch with timeout
+            let weatherResponse;
+            try {
+                const weatherController = new AbortController();
+                const weatherTimeout = setTimeout(() => weatherController.abort(), FETCH_TIMEOUT_MS);
+                weatherResponse = await fetch(
+                    `${WEATHER_URL}?latitude=${latitude}&longitude=${longitude}&current_weather=true`,
+                    { signal: weatherController.signal },
+                );
+                clearTimeout(weatherTimeout);
+            } catch (fetchError) {
+                const isTimeout = fetchError.name === 'AbortError';
+                logger.error(`Weather command - weather fetch failed`, {
+                    error: fetchError.message,
+                    errorName: fetchError.name,
+                    isTimeout,
+                    city,
+                    latitude,
+                    longitude,
+                    userId: interaction.user.id,
+                    guildId: interaction.guildId,
+                    commandName: 'weather'
+                });
+                await InteractionHelper.safeEditReply(interaction, {
+                    embeds: [
+                        errorEmbed(
+                            isTimeout ? "⏱️ Request Timed Out" : "🌐 Network Error",
+                            isTimeout
+                                ? "The weather service took too long to respond. Please try again in a moment."
+                                : "Could not reach the weather service. Please try again later.",
+                        ),
+                    ],
+                });
+                return;
+            }
+
             const weatherData = await weatherResponse.json();
 
             if (weatherData.error) {
                 logger.error(`Weather API error`, {
                     error: weatherData.reason,
                     city: city,
+                    latitude,
+                    longitude,
                     userId: interaction.user.id,
                     guildId: interaction.guildId
                 });
@@ -72,7 +162,7 @@ export default {
                     embeds: [
                         errorEmbed(
                             "API Error",
-                            "A weather service error occurred.",
+                            `The weather service returned an error: ${weatherData.reason ?? "unknown reason"}. Please try again later.`,
                         ),
                     ],
                 });
